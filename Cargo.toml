@@ -10,4 +10,4 @@ name = "reflective_loader"
 path = "src/ReflectiveLoader/main.rs"
 
 [dependencies]
-windows = { version = "0.56.0", features = ["Win32_Security_Authentication_Identity", "Win32_System_WindowsProgramming", "Win32_System_Memory"] }
+windows = { version = "0.56.0", features = ["Win32_Security_Authentication_Identity", "Win32_System_WindowsProgramming", "Win32_System_Memory", "Wdk_System_SystemServices"] }
