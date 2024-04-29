@@ -1,6 +1,6 @@
 use oxidized_armoury::execution::thread::execute_local_thread;
+use oxidized_armoury::util::function_table::FunctionTable;
 use oxidized_armoury::util::pe_headers::PeHeader;
-
 use std::thread::sleep;
 use std::time::Duration;
 use std::mem::transmute;
@@ -30,9 +30,16 @@ fn main() {
     ];
 
     unsafe {
-        let test = PeHeader::parse().entry_point;
-        dbg!(test);
-        assert!(!test.is_null());
+        dbg!("process start");
+        let header = PeHeader::parse();
+        dbg!(header.base_address);
+        
+        let test = FunctionTable::new(header);
+
+        //dbg!(header.export_table_address);
+        //let test = FunctionTable::new(header);
+        //dbg!(test);
+        //assert!(!test.is_null());
         //println!("--- main fn pointer ---");
         //let test_ptr:*const u8 = 0x00007ff665e70000 as *const u8;
         //dbg!(test_ptr);

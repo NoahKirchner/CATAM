@@ -1,12 +1,16 @@
 use std::os::raw::c_void;
-
+use core::arch::asm;
 use windows::Win32::System::ProcessStatus::{GetModuleInformation, MODULEINFO};
+use windows::Win32::System::WindowsProgramming::LDR_DATA_TABLE_ENTRY;
 use windows::core::PCSTR;
-use windows::Win32::System::Threading::GetCurrentProcess;
 use windows::Win32::System::LibraryLoader::GetModuleHandleA;
 use windows::Win32::Foundation::{HANDLE, HMODULE};
 use windows::Win32::System::SystemServices::IMAGE_DOS_HEADER;
 use windows::Win32::System::Diagnostics::Debug::{IMAGE_NT_HEADERS64, IMAGE_FILE_HEADER, IMAGE_OPTIONAL_HEADER64, IMAGE_DATA_DIRECTORY};
+use windows::Win32::System::Threading::{TEB, PEB, PEB_LDR_DATA};
+use windows::Win32::System::Kernel::LIST_ENTRY;
+use windows::Win32::Foundation::UNICODE_STRING;
+
 
 // This is the dos image header magic number.
 const DOS_HEADER_MAGIC_NUMBER:u32 = 0x4D5A;
@@ -39,14 +43,18 @@ pub struct PeHeader {
     pub symbol_table: *const c_void,
     pub text_size: u32,
     pub text_address: *const c_void,
-    pub export_table_address: *const c_void,
 }
 
 impl PeHeader {
+
+    //@TODO Hey retard, you should probably split this into multiple private functions because this
+    //is getting a little crazy. But hey, I'm not your dad, dude. It's your life. You're still
+    //retarded though.
     pub unsafe fn parse() -> PeHeader {
-        // Because this should always return -1, we may wish to consider hardcoding this to avoid
-        // unnecessary imports.
-        let process_handle:HANDLE = GetCurrentProcess();
+      
+        // GetCurrentProcess is typically flagged as malicious, but just resolves to "-1",
+        // so....
+        let process_handle:HANDLE = HANDLE(-1);
 
         // Passing this a null pointer should return the handle to our current module (represented
         // by -1).
@@ -87,11 +95,38 @@ impl PeHeader {
         let text_size:u32 = optional_header.SizeOfCode;
         let text_address:*const c_void = base_address.offset(optional_header.BaseOfCode as isize);
 
-        let data_directory:[IMAGE_DATA_DIRECTORY; 16] = optional_header.DataDirectory;
+        // We now take a brief intermission to begin pebbing and tebbing all over the place. 
+        let teb_address:*const c_void;
 
-        let export_table_address = data_directory[EXPORT].VirtualAddress as *const c_void;
+        // Moves the value @ gs:0x30 into teb_offset, which resolves to the offset from base to the
+        // teb. From here we can just get a pointer to PEB lol.
+        asm!("mov {}, gs:0x30", out(reg) teb_address);
+        
+        let pteb:*const TEB = teb_address as *const TEB;
+        let teb:TEB = *pteb;
+        let peb:PEB = *teb.ProcessEnvironmentBlock;
+        let loader_data:PEB_LDR_DATA = *peb.Ldr;
+        let module_list = loader_data.InMemoryOrderModuleList;
 
+        dbg!("--start loop--");
+        let plist_head:*const LDR_DATA_TABLE_ENTRY = module_list.Flink as *const LDR_DATA_TABLE_ENTRY;
+        dbg!(plist_head);
+        let list_head = *plist_head;
+        dbg!(list_head.FullDllName.Buffer.to_string());
+        dbg!(list_head.InMemoryOrderLinks);
+        let list_head:*const c_void = list_head.InMemoryOrderLinks.Flink as *const c_void;
+        dbg!(list_head);
+        let mut plist_entry:*const c_void = (*(list_head as *const LDR_DATA_TABLE_ENTRY)).InMemoryOrderLinks.Flink as *const c_void;
+        dbg!(plist_entry);
 
+        while plist_entry != list_head {
+            dbg!(plist_entry);
+            let list_entry:LDR_DATA_TABLE_ENTRY = *(plist_entry as *const LDR_DATA_TABLE_ENTRY);
+            dbg!(list_entry.FullDllName.Buffer.to_string());
+            plist_entry = list_entry.InMemoryOrderLinks.Flink as *const c_void;
+        }
+
+        
         PeHeader{
             base_address,
             entry_point,
@@ -100,8 +135,8 @@ impl PeHeader {
             symbol_table,
             text_size,
             text_address,
-            export_table_address,
         }
     }
+
 }
 
