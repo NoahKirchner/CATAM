@@ -1,15 +1,10 @@
 use std::os::raw::c_void;
 use core::arch::asm;
-use windows::Win32::System::ProcessStatus::{GetModuleInformation, MODULEINFO};
 use windows::Win32::System::WindowsProgramming::LDR_DATA_TABLE_ENTRY;
-use windows::core::PCSTR;
-use windows::Win32::System::LibraryLoader::GetModuleHandleA;
-use windows::Win32::Foundation::{HANDLE, HMODULE};
 use windows::Win32::System::SystemServices::IMAGE_DOS_HEADER;
 use windows::Win32::System::Diagnostics::Debug::{IMAGE_NT_HEADERS64, IMAGE_FILE_HEADER, IMAGE_OPTIONAL_HEADER64, IMAGE_DATA_DIRECTORY};
 use windows::Win32::System::Threading::{TEB, PEB, PEB_LDR_DATA};
 use windows::Win32::System::Kernel::LIST_ENTRY;
-use windows::Win32::Foundation::UNICODE_STRING;
 
 
 // This is the dos image header magic number.
@@ -37,7 +32,6 @@ const COM_DESCRIPTOR:usize = 14;
 
 pub struct PeHeader {
     pub base_address: *const c_void,
-    pub entry_point: *const c_void,
     pub sections: u16,
     pub symbols:u32,
     pub symbol_table: *const c_void,
@@ -52,23 +46,21 @@ impl PeHeader {
     //retarded though.
     pub unsafe fn parse() -> PeHeader {
       
-        // GetCurrentProcess is typically flagged as malicious, but just resolves to "-1",
-        // so....
-        let process_handle:HANDLE = HANDLE(-1);
+       
+        // We now begin pebbing and tebbing all over the place. 
 
-        // Passing this a null pointer should return the handle to our current module (represented
-        // by -1).
-        let module_handle:HMODULE = GetModuleHandleA(PCSTR::null()).expect("Failed to get handle on own module.");
+        // Yeah I know I just invalidated the teb step below but I really don't want to do retarded
+        // ass .offset shit if I can just cast directly into a struct tee bee haych. Anyway this
+        // grabs an undocumented field which points us at the base address for the image.
+        let peb_address:*const c_void;
+        asm!("mov {}, gs:0x60", out(reg) peb_address);
+        let ppbase_address = peb_address.offset(0x10);
+        let pbase_address = ppbase_address as *const u64;
+        let base_address = *pbase_address as *const c_void;
         
-        let mut module_info:MODULEINFO = Default::default();
+        dbg!(base_address);
 
-        // Too lazy to count struct size so this should work 
-        let cb:u32 = 0xFFFFFFFF;
-        let _ = GetModuleInformation(process_handle, module_handle, &mut module_info, cb);
-        
-        let base_address:*const c_void = module_info.lpBaseOfDll as *const c_void;
-        let entry_point:*const c_void = module_info.EntryPoint as *const c_void;
-
+        // Fills the relevant header structs with data now that we have the base address
         let pimage_dos_header: *const IMAGE_DOS_HEADER = base_address as *const IMAGE_DOS_HEADER;
         let image_dos_header:IMAGE_DOS_HEADER = *pimage_dos_header;
        
@@ -76,6 +68,8 @@ impl PeHeader {
         // endian-ness issues.
         assert!(u32::from(image_dos_header.e_magic.to_be()) == DOS_HEADER_MAGIC_NUMBER);        
         
+        // Bunch of casts, grabbing offsets from fields in these structs and then casting to more
+        // structs.
         let nt_header_offset:isize = image_dos_header.e_lfanew as isize;
         let nt_header_address:*const c_void = base_address.offset(nt_header_offset);
         
@@ -95,41 +89,49 @@ impl PeHeader {
         let text_size:u32 = optional_header.SizeOfCode;
         let text_address:*const c_void = base_address.offset(optional_header.BaseOfCode as isize);
 
-        // We now take a brief intermission to begin pebbing and tebbing all over the place. 
-        let teb_address:*const c_void;
+        // Now we move onto finding our own import table.
 
-        // Moves the value @ gs:0x30 into teb_offset, which resolves to the offset from base to the
-        // teb. From here we can just get a pointer to PEB lol.
+        // Moves the value @ gs:0x30 into teb_address. That value points to the teb.
+        let teb_address:*const c_void;
         asm!("mov {}, gs:0x30", out(reg) teb_address);
-        
+
         let pteb:*const TEB = teb_address as *const TEB;
         let teb:TEB = *pteb;
         let peb:PEB = *teb.ProcessEnvironmentBlock;
         let loader_data:PEB_LDR_DATA = *peb.Ldr;
-        let module_list = loader_data.InMemoryOrderModuleList;
+        let module_list:LIST_ENTRY = loader_data.InMemoryOrderModuleList;
 
-        dbg!("--start loop--");
-        let plist_head:*const LDR_DATA_TABLE_ENTRY = module_list.Flink as *const LDR_DATA_TABLE_ENTRY;
-        dbg!(plist_head);
-        let list_head = *plist_head;
-        dbg!(list_head.FullDllName.Buffer.to_string());
-        dbg!(list_head.InMemoryOrderLinks);
-        let list_head:*const c_void = list_head.InMemoryOrderLinks.Flink as *const c_void;
-        dbg!(list_head);
-        let mut plist_entry:*const c_void = (*(list_head as *const LDR_DATA_TABLE_ENTRY)).InMemoryOrderLinks.Flink as *const c_void;
-        dbg!(plist_entry);
-
-        while plist_entry != list_head {
-            dbg!(plist_entry);
-            let list_entry:LDR_DATA_TABLE_ENTRY = *(plist_entry as *const LDR_DATA_TABLE_ENTRY);
-            dbg!(list_entry.FullDllName.Buffer.to_string());
-            plist_entry = list_entry.InMemoryOrderLinks.Flink as *const c_void;
-        }
-
+        // I know that this is super confusing looking, so I am going to explain it line by line.
+        // The struct LDR_DATA_TABLE_ENTRY contains within it a struct called LIST_ENTRY, that 
+        // contains two *mut LIST_ENTRY inside of it. We are looping through this doubly linked
+        // list to extract information about imported dlls.
+        // 
+        // ----
+        // Sets a mutable variable to use to loop through that is set to a dereferenced pointer to
+        // the first link in the list, stored inside of OUR module (module_list).
+        let mut plink = *module_list.Flink;
+        // We are setting a guard for the while loop by duplicating our first variable.
+        let guard = plink;
         
+        // While the current link we are observing's FORWARD list item is not equal to our first
+        // link's REAR item.
+        while *plink.Flink != *guard.Blink {
+            // Save a copy of our current LIST_ENTRY.
+            let link = plink;
+            // Dereference our current LIST_ENTRY's next item and cast it to the struct we want,
+            // LDR_DATA_TABLE_ENTRY.
+            let pentry = plink.Flink as *const LDR_DATA_TABLE_ENTRY;
+            let entry = *pentry;
+            dbg!(entry.FullDllName.Buffer.to_string().unwrap());
+            dbg!(entry.DllBase);
+            // Set our next item to iterate through to the pointer containing struct of the object
+            // we just observed.
+            plink = *link.Flink;
+        }
+        // I cannot find a better way to explain this, even to myself. Sorry!
+
         PeHeader{
             base_address,
-            entry_point,
             sections,
             symbols,
             symbol_table,
