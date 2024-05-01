@@ -1,4 +1,5 @@
 use core::arch::asm;
+use std::collections::HashMap;
 use std::os::raw::c_void;
 use windows::Win32::System::Diagnostics::Debug::{
     IMAGE_DATA_DIRECTORY, IMAGE_FILE_HEADER, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64,
@@ -30,6 +31,7 @@ const IAT: usize = 12;
 const DELAY_IMPORT: usize = 13;
 const COM_DESCRIPTOR: usize = 14;
 
+#[derive(Debug)]
 pub struct PeHeader {
     pub base_address: *const c_void,
     pub sections: u16,
@@ -37,6 +39,7 @@ pub struct PeHeader {
     pub symbol_table: *const c_void,
     pub text_size: u32,
     pub text_address: *const c_void,
+    pub dll_map: HashMap<String, *mut c_void>,
 }
 
 impl PeHeader {
@@ -54,8 +57,6 @@ impl PeHeader {
         let ppbase_address = peb_address.offset(0x10);
         let pbase_address = ppbase_address as *const u64;
         let base_address = *pbase_address as *const c_void;
-
-        dbg!(base_address);
 
         // Fills the relevant header structs with data now that we have the base address
         let pimage_dos_header: *const IMAGE_DOS_HEADER = base_address as *const IMAGE_DOS_HEADER;
@@ -109,6 +110,8 @@ impl PeHeader {
         let mut plink = *module_list.Flink;
         // We are setting a guard for the while loop by duplicating our first variable.
         let guard = plink;
+        // Initializes our hashmap.
+        let mut dll_map: HashMap<String, *mut c_void> = HashMap::new();
 
         // While the current link we are observing's FORWARD list item is not equal to our first
         // link's REAR item.
@@ -119,8 +122,9 @@ impl PeHeader {
             // LDR_DATA_TABLE_ENTRY.
             let pentry = plink.Flink as *const LDR_DATA_TABLE_ENTRY;
             let entry = *pentry;
-            dbg!(entry.FullDllName.Buffer.to_string().unwrap());
-            dbg!(entry.DllBase);
+            let entry_name = entry.FullDllName.Buffer.to_string().expect("Failed to unwrap buffer to string, meaning there is probably an issue with offsets or endianness.");
+            let entry_address = entry.DllBase;
+            dll_map.insert(entry_name, entry_address);
             // Set our next item to iterate through to the pointer containing struct of the object
             // we just observed.
             plink = *link.Flink;
@@ -134,6 +138,7 @@ impl PeHeader {
             symbol_table,
             text_size,
             text_address,
+            dll_map,
         }
     }
 }

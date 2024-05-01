@@ -33,9 +33,9 @@ fn main() {
     unsafe {
         dbg!("process start");
         let header = PeHeader::parse();
-        dbg!(header.base_address);
+        dbg!(header);
 
-        let test = FunctionTable::new(header);
+        //let test = FunctionTable::new(header);
 
         //dbg!(header.export_table_address);
         //let test = FunctionTable::new(header);
