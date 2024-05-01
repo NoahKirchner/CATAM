@@ -1,21 +1,17 @@
-use crate::util::pe_headers::PeHeader;
-use windows::Win32::System::Kernel::LIST_ENTRY;
-use windows::Win32::System::WindowsProgramming::LDR_DATA_TABLE_ENTRY;
+use crate::util::pe_headers::{DOS_HEADER_MAGIC_NUMBER, NT_HEADER_MAGIC_NUMBER};
 use core::ffi::c_void;
+use std::collections::HashMap;
+use windows::Win32::System::{
+    Diagnostics::Debug::IMAGE_NT_HEADERS64, SystemServices::IMAGE_DOS_HEADER,
+};
 
-pub struct FunctionTable {
+pub unsafe fn export_dll(dll_base_address: *mut c_void) -> HashMap<String, *mut c_void> {
+    let function_table: HashMap<String, *mut c_void> = HashMap::new();
+    let image_dos_header: IMAGE_DOS_HEADER = *(dll_base_address as *const IMAGE_DOS_HEADER);
 
+    assert!(u32::from(image_dos_header.e_magic.to_be()) == DOS_HEADER_MAGIC_NUMBER);
+
+    let image_nt_header: IMAGE_NT_HEADERS64;
+
+    return function_table;
 }
-
-impl FunctionTable {
-    pub unsafe fn new(pe_header:PeHeader) {
-/*
-        let module_list = pe_header.module_list;
-        let start_address = module_list.Flink as *const c_void;
-        let ptest: *const LDR_DATA_TABLE_ENTRY = start_address as *const LDR_DATA_TABLE_ENTRY;
-        let test:LDR_DATA_TABLE_ENTRY = *ptest;
-        dbg!(test.FullDllName);
-*/
-
-    }
-} 

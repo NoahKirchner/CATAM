@@ -10,11 +10,12 @@ use windows::Win32::System::Threading::{PEB, PEB_LDR_DATA, TEB};
 use windows::Win32::System::WindowsProgramming::LDR_DATA_TABLE_ENTRY;
 
 // This is the dos image header magic number.
-const DOS_HEADER_MAGIC_NUMBER: u32 = 0x4D5A;
+pub const DOS_HEADER_MAGIC_NUMBER: u32 = 0x4D5A;
 // The NT image header magic number, but since it is a dword it is padded by two null bytes.
-const NT_HEADER_MAGIC_NUMBER: u32 = 0x50450000;
+pub const NT_HEADER_MAGIC_NUMBER: u32 = 0x50450000;
 
 //Data directory array constants
+/*
 const EXPORT: usize = 0;
 const IMPORT: usize = 1;
 const RESOURCE: usize = 2;
@@ -30,6 +31,7 @@ const BOUND_IMPORT: usize = 11;
 const IAT: usize = 12;
 const DELAY_IMPORT: usize = 13;
 const COM_DESCRIPTOR: usize = 14;
+*/
 
 #[derive(Debug)]
 pub struct PeHeader {
@@ -122,14 +124,22 @@ impl PeHeader {
             // LDR_DATA_TABLE_ENTRY.
             let pentry = plink.Flink as *const LDR_DATA_TABLE_ENTRY;
             let entry = *pentry;
+            // Extracts relevant fields.
             let entry_name = entry.FullDllName.Buffer.to_string().expect("Failed to unwrap buffer to string, meaning there is probably an issue with offsets or endianness.");
-            let entry_address = entry.DllBase;
-            dll_map.insert(entry_name, entry_address);
+            // You'd think the fucking image base would be the field called
+            // DLLBASE, wouldn't you??? That's how everything else in this retarded
+            // ass dogshit operating system works, but nope, it's fucking
+            // InInitializationOrderLinks, aka reserved2. Just wasted hours of my life
+            // on this retard mode decision.
+            let entry_address_array: [*mut c_void; 2] = entry.Reserved2;
+            let entry_address = entry_address_array[0];
+            // Inserts values into dll_map hashmap with <String, *mut c_void>.
+            dll_map.insert(entry_name.to_lowercase(), entry_address);
             // Set our next item to iterate through to the pointer containing struct of the object
             // we just observed.
             plink = *link.Flink;
         }
-        // I cannot find a better way to explain this, even to myself. Sorry!
+        // I cannot find a better way to explain this, even to myself. Sorry! Sort of.
 
         PeHeader {
             base_address,
