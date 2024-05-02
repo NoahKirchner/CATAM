@@ -44,6 +44,19 @@ pub struct PeHeader {
     pub dll_map: HashMap<String, *mut c_void>,
 }
 
+pub unsafe fn parse_headers(base_address:*const c_void)->(IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64){
+    // Takes the base image address of a PE and returns the windows structs for the
+    // image_dos_header and image_nt_headers64 (and validates their magic numbers).
+    let dos_header:IMAGE_DOS_HEADER = *(base_address as *const IMAGE_DOS_HEADER);
+    assert!(u32::from(dos_header.e_magic.to_be()) == DOS_HEADER_MAGIC_NUMBER);
+    let nt_header_offset:isize = dos_header.e_lfanew as isize;
+    let nt_header_address:*const c_void = base_address.offset(nt_header_offset);
+    let nt_header:IMAGE_NT_HEADERS64 = *(nt_header_address as *const IMAGE_NT_HEADERS64);
+    assert!(nt_header.Signature.to_be() == NT_HEADER_MAGIC_NUMBER);
+    (dos_header, nt_header)
+}
+
+
 impl PeHeader {
     //@TODO Hey retard, you should probably split this into multiple private functions because this
     //is getting a little crazy. But hey, I'm not your dad, dude. It's your life. You're still
@@ -59,24 +72,8 @@ impl PeHeader {
         let ppbase_address = peb_address.offset(0x10);
         let pbase_address = ppbase_address as *const u64;
         let base_address = *pbase_address as *const c_void;
-
-        // Fills the relevant header structs with data now that we have the base address
-        let pimage_dos_header: *const IMAGE_DOS_HEADER = base_address as *const IMAGE_DOS_HEADER;
-        let image_dos_header: IMAGE_DOS_HEADER = *pimage_dos_header;
-
-        // Verifies that we have the correct magic number. If this fails, I would put money on
-        // endian-ness issues.
-        assert!(u32::from(image_dos_header.e_magic.to_be()) == DOS_HEADER_MAGIC_NUMBER);
-
-        // Bunch of casts, grabbing offsets from fields in these structs and then casting to more
-        // structs.
-        let nt_header_offset: isize = image_dos_header.e_lfanew as isize;
-        let nt_header_address: *const c_void = base_address.offset(nt_header_offset);
-
-        let pnt_header: *const IMAGE_NT_HEADERS64 = nt_header_address as *const IMAGE_NT_HEADERS64;
-        let nt_header: IMAGE_NT_HEADERS64 = *pnt_header;
-
-        assert!(nt_header.Signature.to_be() == NT_HEADER_MAGIC_NUMBER);
+        
+        let (dos_header, nt_header) = parse_headers(base_address);
 
         let image_file_header: IMAGE_FILE_HEADER = nt_header.FileHeader;
         let optional_header: IMAGE_OPTIONAL_HEADER64 = nt_header.OptionalHeader;

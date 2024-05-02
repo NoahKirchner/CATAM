@@ -1,9 +1,10 @@
 //use oxidized_armoury::execution::thread::execute_local_thread;
-use oxidized_armoury::util::function_table::FunctionTable;
+use oxidized_armoury::util::function_table::export_dll;
 use oxidized_armoury::util::pe_headers::PeHeader;
 use std::mem::transmute;
 use std::thread::sleep;
 use std::time::Duration;
+use std::ffi::c_void;
 
 fn main() {
     /*
@@ -33,7 +34,10 @@ fn main() {
     unsafe {
         dbg!("process start");
         let header = PeHeader::parse();
-        dbg!(header);
+        dbg!(&header);
+        let dll_address = header.dll_map.get("kernel32.dll").unwrap().clone();
+        dbg!(dll_address);
+        export_dll(dll_address);
 
         //let test = FunctionTable::new(header);
 
