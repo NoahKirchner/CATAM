@@ -8,6 +8,7 @@ use windows::Win32::System::{
 };
 use windows::Win32::System::SystemServices::IMAGE_EXPORT_DIRECTORY;
 
+#[derive(Debug)]
 pub struct FunctionEntry {
     pub address:*mut c_void,
     pub ordinal:u16,

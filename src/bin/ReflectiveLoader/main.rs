@@ -37,8 +37,10 @@ fn main() {
         dbg!(&header);
         let dll_address = header.dll_map.get("kernel32.dll").unwrap().clone();
         dbg!(dll_address);
-        export_dll(dll_address);
+        let function_table = export_dll(dll_address);
 
+        let test = function_table.get("CopyFileA").unwrap();
+        dbg!(test);
         //let test = FunctionTable::new(header);
 
         //dbg!(header.export_table_address);
