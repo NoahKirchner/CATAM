@@ -44,18 +44,17 @@ pub struct PeHeader {
     pub dll_map: HashMap<String, *mut c_void>,
 }
 
-pub unsafe fn parse_headers(base_address:*const c_void)->(IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64){
+pub unsafe fn parse_headers(base_address: *const c_void) -> (IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64) {
     // Takes the base image address of a PE and returns the windows structs for the
     // image_dos_header and image_nt_headers64 (and validates their magic numbers).
-    let dos_header:IMAGE_DOS_HEADER = *(base_address as *const IMAGE_DOS_HEADER);
+    let dos_header: IMAGE_DOS_HEADER = *(base_address as *const IMAGE_DOS_HEADER);
     assert!(u32::from(dos_header.e_magic.to_be()) == DOS_HEADER_MAGIC_NUMBER);
-    let nt_header_offset:isize = dos_header.e_lfanew as isize;
-    let nt_header_address:*const c_void = base_address.offset(nt_header_offset);
-    let nt_header:IMAGE_NT_HEADERS64 = *(nt_header_address as *const IMAGE_NT_HEADERS64);
+    let nt_header_offset: isize = dos_header.e_lfanew as isize;
+    let nt_header_address: *const c_void = base_address.offset(nt_header_offset);
+    let nt_header: IMAGE_NT_HEADERS64 = *(nt_header_address as *const IMAGE_NT_HEADERS64);
     assert!(nt_header.Signature.to_be() == NT_HEADER_MAGIC_NUMBER);
     (dos_header, nt_header)
 }
-
 
 impl PeHeader {
     //@TODO Hey retard, you should probably split this into multiple private functions because this
@@ -72,7 +71,7 @@ impl PeHeader {
         let ppbase_address = peb_address.offset(0x10);
         let pbase_address = ppbase_address as *const u64;
         let base_address = *pbase_address as *const c_void;
-        
+
         let (dos_header, nt_header) = parse_headers(base_address);
 
         let image_file_header: IMAGE_FILE_HEADER = nt_header.FileHeader;
