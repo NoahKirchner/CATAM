@@ -2,6 +2,7 @@ use crate::util::pe_headers::parse_headers;
 use core::ffi::{c_char, c_void};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+use std::mem::transmute;
 use std::slice;
 use windows::Win32::System::SystemServices::IMAGE_EXPORT_DIRECTORY;
 use windows::Win32::System::{
@@ -15,8 +16,16 @@ pub struct FunctionEntry {
     pub ordinal: u16,
 }
 
+pub fn get_function_pointer(function_table: &HashMap<String, FunctionEntry>, name:&str) -> *mut c_void {
+    function_table.get(name)
+        .expect(format!("Failed to find function {name} in function table").as_str())
+        .address
+}
+
+
 // Data directory array constant
 const EXPORT: usize = 0;
+
 pub unsafe fn export_dll(dll_base_address: *mut c_void) -> HashMap<String, FunctionEntry> {
     let mut function_table: HashMap<String, FunctionEntry> = HashMap::new();
     // We don't need the dos header so pce out thug

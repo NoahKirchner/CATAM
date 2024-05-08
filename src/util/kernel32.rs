@@ -1,4 +1,5 @@
-use crate::util::function_table::{export_dll, FunctionEntry};
+#![allow(nonstandard_style)]
+use crate::util::function_table::{export_dll, get_function_pointer};
 use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
 use std::mem::transmute;
@@ -28,49 +29,15 @@ impl Kernel32 {
             .expect("No kernel32 imported in header.");
         let function_table = export_dll(*dll);
 
-        //TODO turn this awful retarded shit into a macro bro please
-        let pvirtualalloc: *mut c_void = function_table
-            .get("VirtualAlloc")
-            .expect("Failed to get function")
-            .address;
+        let virtualalloc = transmute(get_function_pointer(&function_table, "VirtualAlloc"));
 
-        let virtualalloc: unsafe extern "C" fn(*mut c_void, usize, u32, u32) -> *mut c_void =
-            transmute(pvirtualalloc);
+        let virtualprotect = transmute(get_function_pointer(&function_table, "VirtualProtect"));
 
-        let pvirtualprotect: *mut c_void = function_table
-            .get("VirtualProtect")
-            .expect("Failed to get function")
-            .address;
+        let createthread = transmute(get_function_pointer(&function_table, "CreateThread"));
 
-        let virtualprotect: unsafe extern "C" fn(
-            lpaddress: *const c_void,
-            dwsize: usize,
-            flnewprotect: u32,
-            lpfloldprotect: *mut u32,
-        ) -> () = transmute(pvirtualprotect);
+        let waitforsingleobject = transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
 
-        let pcreatethread: *mut c_void = function_table
-            .get("CreateThread")
-            .expect("Failed to get function")
-            .address;
-        
-        // TODO error handling for thread return (if you really care about that lol)
-        let createthread: unsafe extern "C" fn(
-            lpthreadattributes: *const c_void,
-            dwstacksize: u32,
-            lpstartaddress: *mut c_void,
-            lpparameter: *const c_void,
-            dwcreationflags: u32,
-            lpthreadid: *const u32,
-        ) -> isize = transmute(pcreatethread);
 
-        let pwaitforsingleobject: *mut c_void = function_table
-            .get("WaitForSingleObject")
-            .expect("Failed to get function")
-            .address;
-        
-        let waitforsingleobject: unsafe extern "C" fn(hhandle: isize, dwmilliseconds: u32) -> () =
-            transmute(pwaitforsingleobject);
 
         Kernel32 {
             virtualalloc,
@@ -82,16 +49,16 @@ impl Kernel32 {
 
     pub unsafe fn VirtualAlloc(
         &self,
-        lpAddress: Option<*mut c_void>,
-        dwSize: usize,
-        flAllocationType: u32,
-        flProtect: u32,
+        lpaddress: Option<*mut c_void>,
+        dwsize: usize,
+        flallocationtype: u32,
+        flprotect: u32,
     ) -> *mut c_void {
-        let lp_address = match lpAddress {
+        let lp_address = match lpaddress {
             None => null_mut() as *mut c_void,
             Some(x) => x,
         };
-        (self.virtualalloc)(lp_address, dwSize, flAllocationType, flProtect)
+        (self.virtualalloc)(lp_address, dwsize, flallocationtype, flprotect)
     }
     // TODO implement error handling by checking the result of lpfloldprotect
     pub unsafe fn VirtualProtect(
