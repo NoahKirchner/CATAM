@@ -2,6 +2,7 @@
 use crate::util::function_table::{export_dll, get_function_pointer};
 use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
+use std::ffi::CString;
 use std::mem::transmute;
 use std::ptr::{null, null_mut};
 pub struct Kernel32 {
@@ -19,6 +20,15 @@ pub struct Kernel32 {
     ) -> isize,
     // isize is a HANDLE, u32 is time (use the INFINITE constant)
     waitforsingleobject: unsafe extern "C" fn(isize, u32) -> (),
+
+    // There's probably a better way to do this but this needs to
+    // be a pointer to a null terminated C String and this is what the
+    // legitimate windows crate does.
+    loadlibrarya: unsafe extern "C" fn(*const c_void) -> isize,
+    // GetModuleHandle
+    // GetProcAddress
+    // ReadProcessMemory
+    // WriteProcessMemory
 }
 
 impl Kernel32 {
@@ -35,15 +45,17 @@ impl Kernel32 {
 
         let createthread = transmute(get_function_pointer(&function_table, "CreateThread"));
 
-        let waitforsingleobject = transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
+        let waitforsingleobject =
+            transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
 
-
+        let loadlibrarya = transmute(get_function_pointer(&function_table, "LoadLibraryA"));
 
         Kernel32 {
             virtualalloc,
             virtualprotect,
             createthread,
             waitforsingleobject,
+            loadlibrarya,
         }
     }
 
@@ -104,5 +116,17 @@ impl Kernel32 {
 
     pub unsafe fn WaitForSingleObject(&self, hhandle: isize, dwmilliseconds: u32) -> () {
         (self.waitforsingleobject)(hhandle, dwmilliseconds)
+    }
+
+    pub unsafe fn LoadLibraryA(&self, library: &str) -> isize {
+        // TODO remove this unwrap, retard, but also
+        // this creates a null terminated string from the library string
+        // turns it into bytes and returns a *const u8 (pointer) to the byte
+        // array. It is retarded, but I think it will work.
+        dbg!(CString::new(library)).unwrap();
+        let dll =
+            CString::new(library).unwrap().to_bytes_with_nul() as *const [u8] as *const c_void;
+        dbg!(dll);
+        (self.loadlibrarya)(dll)
     }
 }

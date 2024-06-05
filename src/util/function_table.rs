@@ -1,14 +1,11 @@
 use crate::util::pe_headers::parse_headers;
 use core::ffi::{c_char, c_void};
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::mem::transmute;
+use std::ffi::{CStr};
+
 use std::slice;
 use windows::Win32::System::SystemServices::IMAGE_EXPORT_DIRECTORY;
-use windows::Win32::System::{
-    Diagnostics::Debug::{IMAGE_DATA_DIRECTORY, IMAGE_NT_HEADERS64},
-    SystemServices::IMAGE_DOS_HEADER,
-};
+
 
 #[derive(Debug)]
 pub struct FunctionEntry {
@@ -16,12 +13,15 @@ pub struct FunctionEntry {
     pub ordinal: u16,
 }
 
-pub fn get_function_pointer(function_table: &HashMap<String, FunctionEntry>, name:&str) -> *mut c_void {
-    function_table.get(name)
+pub fn get_function_pointer(
+    function_table: &HashMap<String, FunctionEntry>,
+    name: &str,
+) -> *mut c_void {
+    function_table
+        .get(name)
         .expect(format!("Failed to find function {name} in function table").as_str())
         .address
 }
-
 
 // Data directory array constant
 const EXPORT: usize = 0;

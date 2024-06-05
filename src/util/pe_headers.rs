@@ -2,7 +2,7 @@ use core::arch::asm;
 use std::collections::HashMap;
 use std::os::raw::c_void;
 use windows::Win32::System::Diagnostics::Debug::{
-    IMAGE_DATA_DIRECTORY, IMAGE_FILE_HEADER, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64,
+    IMAGE_FILE_HEADER, IMAGE_NT_HEADERS64, IMAGE_OPTIONAL_HEADER64,
 };
 use windows::Win32::System::Kernel::LIST_ENTRY;
 use windows::Win32::System::SystemServices::IMAGE_DOS_HEADER;
@@ -72,7 +72,7 @@ impl PeHeader {
         let pbase_address = ppbase_address as *const u64;
         let base_address = *pbase_address as *const c_void;
 
-        let (dos_header, nt_header) = parse_headers(base_address);
+        let (_dos_header, nt_header) = parse_headers(base_address);
 
         let image_file_header: IMAGE_FILE_HEADER = nt_header.FileHeader;
         let optional_header: IMAGE_OPTIONAL_HEADER64 = nt_header.OptionalHeader;
