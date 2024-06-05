@@ -36,7 +36,7 @@ pub unsafe fn execute_local_thread(
 
     // TODO \/ This doesn't ever actually update to the old protection flags, we may have to move
     // this functionality to the reimplemented virtualprotect function in kernel32.rs.
-    let mut old_protection_flags = 0 as *mut u32;
+    let old_protection_flags = 0 as *mut u32;
     kernel32.VirtualProtect(
         mem_pointer as *const c_void,
         shellcode_size,
