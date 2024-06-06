@@ -1,13 +1,23 @@
 #![allow(nonstandard_style)]
+// Rust imports
 use crate::util::function_table::{export_dll, get_function_pointer};
 use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
 use std::ffi::CString;
 use std::mem::transmute;
 use std::ptr::{null, null_mut};
+
+// Windows struct imports
+use windows::Win32::Security::{SECURITY_ATTRIBUTES};
+use windows::Win32::System::Threading::{STARTUPINFOA, PROCESS_INFORMATION};
+
+// @TODO, use the windows crate's repr c structs as arguments where they are needed. Use the 
+// implementation of CreateProcess below as a template
+
 pub struct Kernel32 {
     virtualalloc: unsafe extern "C" fn(*mut c_void, usize, u32, u32) -> *mut c_void,
     virtualprotect: unsafe extern "C" fn(*const c_void, usize, u32, *mut u32) -> (),
+    // @TODO implement windows structs for these random fuckoff fields, like SECURITY_ATTRIBUTES
     // Thread attributes (None for our purposes), stack size, pointer to buffer, pointer to
     // variable to be passed to the thread, creation flags, thread id (None for our purposes)
     createthread: unsafe extern "C" fn(
@@ -18,6 +28,22 @@ pub struct Kernel32 {
         u32,
         *const u32,
     ) -> isize,
+
+
+    createprocess: unsafe extern "C" fn(
+        *const c_void, // LPCSTR lpApplicationName
+        *mut c_void, // LPSTR lpCommandLine [in, out]
+        *const SECURITY_ATTRIBUTES, // LPSECURITY_ATTRIBUTES lpProcessAttributes
+        *const SECURITY_ATTRIBUTES, // LPSECURITY_ATTRIBUTES lpThreadAttributes
+        bool, // bool bInheritHandles (just google it dude), prolly set true
+        u32, // DWORD dwCreationflags
+        *const c_void, // LPVOID lpEnvironment
+        *const c_void, //LPCSTR lpCurrentDirectory
+        *const STARTUPINFOA, //LPSTARTUPINFOA lpStartupInfo
+        *mut PROCESS_INFORMATION, // LPROCESS_INFORMATION lpProcessInformation [out]
+
+    ) -> (),
+
     // isize is a HANDLE, u32 is time (use the INFINITE constant)
     waitforsingleobject: unsafe extern "C" fn(isize, u32) -> (),
 
@@ -45,15 +71,19 @@ impl Kernel32 {
 
         let createthread = transmute(get_function_pointer(&function_table, "CreateThread"));
 
+        let createprocess = todo!();
+
         let waitforsingleobject =
             transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
 
         let loadlibrarya = transmute(get_function_pointer(&function_table, "LoadLibraryA"));
 
+
         Kernel32 {
             virtualalloc,
             virtualprotect,
             createthread,
+            createprocess,
             waitforsingleobject,
             loadlibrarya,
         }
