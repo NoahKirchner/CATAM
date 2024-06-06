@@ -8,10 +8,16 @@ use std::mem::transmute;
 use std::ptr::{null, null_mut};
 
 // Windows struct imports
-use windows::Win32::Security::{SECURITY_ATTRIBUTES};
-use windows::Win32::System::Threading::{STARTUPINFOA, PROCESS_INFORMATION};
+use windows::Win32::Security::SECURITY_ATTRIBUTES;
+use windows::Win32::System::Threading::{PROCESS_INFORMATION, STARTUPINFOEXA};
 
-// @TODO, use the windows crate's repr c structs as arguments where they are needed. Use the 
+// Defines for process creation flags, probably move these to a
+// more abstracted file in ../execution/ or something
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CREATE_SUSPENDED: u32 = 0x00000004;
+const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x00080000;
+
+// @TODO, use the windows crate's repr c structs as arguments where they are needed. Use the
 // implementation of CreateProcess below as a template
 
 pub struct Kernel32 {
@@ -29,19 +35,17 @@ pub struct Kernel32 {
         *const u32,
     ) -> isize,
 
-
     createprocess: unsafe extern "C" fn(
         *const c_void, // LPCSTR lpApplicationName
-        *mut c_void, // LPSTR lpCommandLine [in, out]
-        *const SECURITY_ATTRIBUTES, // LPSECURITY_ATTRIBUTES lpProcessAttributes
-        *const SECURITY_ATTRIBUTES, // LPSECURITY_ATTRIBUTES lpThreadAttributes
-        bool, // bool bInheritHandles (just google it dude), prolly set true
-        u32, // DWORD dwCreationflags
+        *mut c_void,   // LPSTR lpCommandLine [in, out]
+        *const c_void, // LPSECURITY_ATTRIBUTES lpProcessAttributes
+        *const c_void, // LPSECURITY_ATTRIBUTES lpThreadAttributes
+        bool,          // bool bInheritHandles (just google it dude), prolly set true
+        u32,           // DWORD dwCreationflags
         *const c_void, // LPVOID lpEnvironment
         *const c_void, //LPCSTR lpCurrentDirectory
-        *const STARTUPINFOA, //LPSTARTUPINFOA lpStartupInfo
-        *mut PROCESS_INFORMATION, // LPROCESS_INFORMATION lpProcessInformation [out]
-
+        *const c_void, //LPSTARTUPINFOA lpStartupInfo
+        *mut c_void,   // LPROCESS_INFORMATION lpProcessInformation [out]
     ) -> (),
 
     // isize is a HANDLE, u32 is time (use the INFINITE constant)
@@ -71,13 +75,12 @@ impl Kernel32 {
 
         let createthread = transmute(get_function_pointer(&function_table, "CreateThread"));
 
-        let createprocess = todo!();
+        let createprocess = transmute(get_function_pointer(&function_table, "CreateProcessA"));
 
         let waitforsingleobject =
             transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
 
         let loadlibrarya = transmute(get_function_pointer(&function_table, "LoadLibraryA"));
-
 
         Kernel32 {
             virtualalloc,
@@ -144,6 +147,66 @@ impl Kernel32 {
         )
     }
 
+    //@TODO needs the process creation flags implemented somewhere (probably at the top of this
+    //file)
+    pub unsafe fn CreateProcess(
+        &self,
+        exepath: &str,
+        commandline: Option<&str>,
+        procattributes: Option<SECURITY_ATTRIBUTES>,
+        threadattributes: Option<SECURITY_ATTRIBUTES>,
+        inherithandles: bool,
+        creationflags: u32,
+        environment: Option<*const c_void>,
+        directory: Option<&str>,
+        startupinfo: STARTUPINFOEXA,
+    ) -> PROCESS_INFORMATION {
+        let mut processinfo = PROCESS_INFORMATION::default();
+
+        // mapping function arguments to API arguments
+        let lpApplicationName =
+            CString::new(exepath).unwrap().to_bytes_with_nul() as *const [u8] as *const c_void;
+        let lpCommandLine = match commandline {
+            None => null_mut(),
+            Some(x) => CString::new(x).unwrap().to_bytes_with_nul() as *const [u8] as *mut c_void,
+        };
+
+        // I do not understand the *const _ syntax but it works
+        let lpProcessAttributes = match procattributes {
+            None => null() as *const c_void,
+            Some(x) => &x as *const _ as *const c_void,
+        };
+        let lpThreadAttributes = match threadattributes {
+            None => null() as *const c_void,
+            Some(x) => &x as *const _ as *const c_void,
+        };
+        let bInheritHandles = inherithandles;
+        let dwCreationFlags = creationflags;
+        let lpEnvironment = match environment {
+            None => null() as *const c_void,
+            Some(x) => x,
+        };
+        let lpCurrentDirectory = match directory {
+            None => null() as *const c_void,
+            Some(x) => CString::new(x).unwrap().to_bytes_with_nul() as *const [u8] as *const c_void,
+        };
+        let lpStartupInfo = &startupinfo as *const _ as *const c_void;
+        let lpProcessInformation = &mut processinfo as *mut _ as *mut c_void;
+        (self.createprocess)(
+            lpApplicationName,
+            lpCommandLine,
+            lpProcessAttributes,
+            lpThreadAttributes,
+            bInheritHandles,
+            dwCreationFlags,
+            lpEnvironment,
+            lpCurrentDirectory,
+            lpStartupInfo,
+            lpProcessInformation,
+        );
+        processinfo
+    }
+
     pub unsafe fn WaitForSingleObject(&self, hhandle: isize, dwmilliseconds: u32) -> () {
         (self.waitforsingleobject)(hhandle, dwmilliseconds)
     }
@@ -152,7 +215,8 @@ impl Kernel32 {
         // TODO remove this unwrap, retard, but also
         // this creates a null terminated string from the library string
         // turns it into bytes and returns a *const u8 (pointer) to the byte
-        // array. It is retarded, but I think it will work.
+        // array and then casts it as a const c_void because slices are not valid in
+        // ffi
         dbg!(CString::new(library)).unwrap();
         let dll =
             CString::new(library).unwrap().to_bytes_with_nul() as *const [u8] as *const c_void;
