@@ -3,19 +3,19 @@
 use crate::util::function_table::{export_dll, get_function_pointer};
 use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::mem::transmute;
 use std::ptr::{null, null_mut};
 
 // Windows struct imports
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
+use windows::Win32::System::Kernel::CSTRING;
 use windows::Win32::System::Threading::{PROCESS_INFORMATION, STARTUPINFOEXA};
-
 // Defines for process creation flags, probably move these to a
 // more abstracted file in ../execution/ or something
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-const CREATE_SUSPENDED: u32 = 0x00000004;
-const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x00080000;
+pub const CREATE_NO_WINDOW: u32 = 0x08000000;
+pub const CREATE_SUSPENDED: u32 = 0x00000004;
+pub const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x00080000;
 
 // @TODO, use the windows crate's repr c structs as arguments where they are needed. Use the
 // implementation of CreateProcess below as a template
@@ -163,9 +163,12 @@ impl Kernel32 {
     ) -> PROCESS_INFORMATION {
         let mut processinfo = PROCESS_INFORMATION::default();
 
+        dbg!(CString::new(exepath).unwrap());
         // mapping function arguments to API arguments
-        let lpApplicationName =
-            CString::new(exepath).unwrap().to_bytes_with_nul() as *const [u8] as *const c_void;
+        let rawexepath = CString::new(exepath).unwrap();
+        let exepathcstr = CStr::from_bytes_with_nul(rawexepath.to_bytes_with_nul()).unwrap();
+        let lpApplicationName = exepathcstr.as_ptr() as *const c_void;
+
         let lpCommandLine = match commandline {
             None => null_mut(),
             Some(x) => CString::new(x).unwrap().to_bytes_with_nul() as *const [u8] as *mut c_void,
@@ -192,6 +195,18 @@ impl Kernel32 {
         };
         let lpStartupInfo = &startupinfo as *const _ as *const c_void;
         let lpProcessInformation = &mut processinfo as *mut _ as *mut c_void;
+        dbg!(
+            lpApplicationName,
+            lpCommandLine,
+            lpProcessAttributes,
+            lpThreadAttributes,
+            bInheritHandles,
+            dwCreationFlags,
+            lpEnvironment,
+            lpCurrentDirectory,
+            lpStartupInfo,
+            lpProcessInformation
+        );
         (self.createprocess)(
             lpApplicationName,
             lpCommandLine,

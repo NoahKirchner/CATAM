@@ -1,11 +1,14 @@
 use catam::execution::thread::execute_local_thread;
 use catam::util::function_table::export_dll;
-use catam::util::kernel32::Kernel32;
+use catam::util::kernel32::*;
 use catam::util::pe_headers::PeHeader;
+use std::f32::INFINITY;
 use std::ffi::{c_void, CString};
 use std::mem::transmute;
 use std::thread::sleep;
 use std::time::Duration;
+use windows::Win32::Foundation::GetLastError;
+use windows::Win32::System::Threading::STARTUPINFOEXA;
 
 fn main() {
     let buf: [u8; 460] = [
@@ -47,6 +50,24 @@ fn main() {
         let kernel32 = Kernel32::parse(header);
         let test = kernel32.LoadLibraryA("aepic.dll");
         dbg!(test);
+
+        let startupinfo = STARTUPINFOEXA::default();
+        dbg!(startupinfo);
+        let test = kernel32.CreateProcess(
+            "C:\\Windows\\System32\\calc.exe",
+            None,
+            None,
+            None,
+            false,
+            EXTENDED_STARTUPINFO_PRESENT,
+            None,
+            None,
+            startupinfo,
+        );
+        let wtf = GetLastError();
+        dbg!(wtf);
+        dbg!(test);
+
         //let _ = execute_local_thread(header, buf.to_vec());
     }
 }
