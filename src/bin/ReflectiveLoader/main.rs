@@ -55,7 +55,7 @@ fn main() {
         dbg!(startupinfo);
         let test = kernel32.CreateProcess(
             "C:\\Windows\\System32\\calc.exe",
-            None,
+            "",//("C:\\Windows\\System32\\cmd.exe /c whoami"),
             None,
             None,
             false,

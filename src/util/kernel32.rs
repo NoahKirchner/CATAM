@@ -1,8 +1,8 @@
 #![allow(nonstandard_style)]
 // Rust imports
-use crate::pcstr;
 use crate::util::function_table::{export_dll, get_function_pointer};
 use crate::util::pe_headers::PeHeader;
+use crate::util::helpers::*;
 use core::ffi::c_void;
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
@@ -38,7 +38,7 @@ pub struct Kernel32 {
 
     createprocess: unsafe extern "C" fn(
         *const c_void, // LPCSTR lpApplicationName
-        *mut c_void,   // LPSTR lpCommandLine [in, out]
+        *const c_void,   // LPSTR lpCommandLine [in, out]
         *const c_void, // LPSECURITY_ATTRIBUTES lpProcessAttributes
         *const c_void, // LPSECURITY_ATTRIBUTES lpThreadAttributes
         bool,          // bool bInheritHandles (just google it dude), prolly set true
@@ -153,7 +153,7 @@ impl Kernel32 {
     pub unsafe fn CreateProcess(
         &self,
         exepath: &str,
-        commandline: Option<&str>,
+        commandline: &str,
         procattributes: Option<SECURITY_ATTRIBUTES>,
         threadattributes: Option<SECURITY_ATTRIBUTES>,
         inherithandles: bool,
@@ -163,17 +163,18 @@ impl Kernel32 {
         startupinfo: STARTUPINFOEXA,
     ) -> PROCESS_INFORMATION {
         let mut processinfo = PROCESS_INFORMATION::default();
+       
+        // I know that these are terrible implementations that should be handled 
+        // with a match statement or something because they are technically optional, 
+        // but I swear to God using ANY kind of error checking here passes an invalid string 
+        // somehow @TODO figure out what the fuck happenin. I think it's a Windows API issue.
+        let cstringpath = convert_to_cstring(exepath);
+        let path = convert_to_cstr(&cstringpath);
+        let lpApplicationName = path.as_ptr() as *const c_void;
 
-        let path = pcstr!(exepath);
-        // mapping function arguments to API arguments
-        //let rawexepath = CString::new(exepath).unwrap();
-        //let exepathcstr = CStr::from_bytes_with_nul(rawexepath.to_bytes_with_nul()).unwrap();
-        let lpApplicationName = path as *const c_void;
-
-        let lpCommandLine = match commandline {
-            None => null_mut(),
-            Some(x) => CString::new(x).unwrap().to_bytes_with_nul() as *const [u8] as *mut c_void,
-        };
+        let cstrcmd = convert_to_cstring(commandline);
+        let cmd = convert_to_cstr(&cstrcmd);
+        let lpCommandLine = cmd.as_ptr() as *const c_void;
 
         // I do not understand the *const _ syntax but it works
         let lpProcessAttributes = match procattributes {
@@ -184,6 +185,7 @@ impl Kernel32 {
             None => null() as *const c_void,
             Some(x) => &x as *const _ as *const c_void,
         };
+
         let bInheritHandles = inherithandles;
         let dwCreationFlags = creationflags;
         let lpEnvironment = match environment {
