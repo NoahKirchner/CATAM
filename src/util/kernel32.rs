@@ -1,5 +1,6 @@
 #![allow(nonstandard_style)]
 // Rust imports
+use crate::pcstr;
 use crate::util::function_table::{export_dll, get_function_pointer};
 use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
@@ -163,11 +164,11 @@ impl Kernel32 {
     ) -> PROCESS_INFORMATION {
         let mut processinfo = PROCESS_INFORMATION::default();
 
-        dbg!(CString::new(exepath).unwrap());
+        let path = pcstr!(exepath);
         // mapping function arguments to API arguments
-        let rawexepath = CString::new(exepath).unwrap();
-        let exepathcstr = CStr::from_bytes_with_nul(rawexepath.to_bytes_with_nul()).unwrap();
-        let lpApplicationName = exepathcstr.as_ptr() as *const c_void;
+        //let rawexepath = CString::new(exepath).unwrap();
+        //let exepathcstr = CStr::from_bytes_with_nul(rawexepath.to_bytes_with_nul()).unwrap();
+        let lpApplicationName = path as *const c_void;
 
         let lpCommandLine = match commandline {
             None => null_mut(),
