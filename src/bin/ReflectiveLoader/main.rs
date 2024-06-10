@@ -67,6 +67,11 @@ fn main() {
         let wtf = GetLastError();
         dbg!(wtf);
         dbg!(test);
+        dbg!("next thing lol");
+        let anothertest = kernel32.InitializeProcThreadAttributeList(1);
+        GetLastError();
+        dbg!(anothertest);
+
 
         //let _ = execute_local_thread(header, buf.to_vec());
     }

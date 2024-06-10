@@ -8,10 +8,12 @@ use std::ffi::{CStr, CString};
 use std::mem::transmute;
 use std::ptr::{null, null_mut};
 
+
 // Windows struct imports
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 use windows::Win32::System::Kernel::CSTRING;
-use windows::Win32::System::Threading::{PROCESS_INFORMATION, STARTUPINFOEXA};
+use windows::Win32::System::Threading::{PROCESS_INFORMATION, STARTUPINFOEXA, LPPROC_THREAD_ATTRIBUTE_LIST};
+use windows::Win32::Foundation::GetLastError;
 // Defines for process creation flags, probably move these to a
 // more abstracted file in ../execution/ or something
 pub const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -49,6 +51,13 @@ pub struct Kernel32 {
         *mut c_void,   // LPROCESS_INFORMATION lpProcessInformation [out]
     ) -> (),
 
+    initializeprocthreadattributelist: unsafe extern "C" fn(
+        *mut c_void,
+        u32,
+        u32, //This must be 0
+        *mut usize,
+    ) -> (),
+
     // isize is a HANDLE, u32 is time (use the INFINITE constant)
     waitforsingleobject: unsafe extern "C" fn(isize, u32) -> (),
 
@@ -78,6 +87,9 @@ impl Kernel32 {
 
         let createprocess = transmute(get_function_pointer(&function_table, "CreateProcessA"));
 
+        let initializeprocthreadattributelist = transmute(get_function_pointer(&function_table, "InitializeProcThreadAttributeList"));
+        dbg!(initializeprocthreadattributelist);
+
         let waitforsingleobject =
             transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
 
@@ -88,6 +100,7 @@ impl Kernel32 {
             virtualprotect,
             createthread,
             createprocess,
+            initializeprocthreadattributelist,
             waitforsingleobject,
             loadlibrarya,
         }
@@ -223,6 +236,23 @@ impl Kernel32 {
             lpProcessInformation,
         );
         processinfo
+    }
+
+    pub unsafe fn InitializeProcThreadAttributeList(&self, 
+        attributecount:u32,
+        )->LPPROC_THREAD_ATTRIBUTE_LIST {
+        let mut size: usize = 0;
+        dbg!(size);
+        let mut lpsize = &mut size as *mut usize;
+        dbg!(lpsize);
+        dbg!((self.initializeprocthreadattributelist)(core::ptr::null_mut(), attributecount.clone(), 0, lpsize));
+        dbg!(GetLastError());
+        dbg!(size);
+        let mut lpattributelist = LPPROC_THREAD_ATTRIBUTE_LIST::default();
+        dbg!(lpattributelist);
+        (self.initializeprocthreadattributelist)(lpattributelist.0, attributecount, 0, lpsize);
+        dbg!(lpattributelist);
+        lpattributelist
     }
 
     pub unsafe fn WaitForSingleObject(&self, hhandle: isize, dwmilliseconds: u32) -> () {
