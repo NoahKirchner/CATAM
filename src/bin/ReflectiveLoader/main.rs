@@ -1,6 +1,7 @@
 use catam::execution::thread::execute_local_thread;
 use catam::util::function_table::export_dll;
 use catam::util::kernel32::*;
+use catam::util::ntdll::*;
 use catam::util::pe_headers::PeHeader;
 use std::f32::INFINITY;
 use std::ffi::{c_void, CString};
@@ -47,7 +48,8 @@ fn main() {
     unsafe {
         dbg!("process start");
         let header = PeHeader::parse();
-        let kernel32 = Kernel32::parse(header);
+        let kernel32 = Kernel32::parse(&header);
+        let ntdll = Ntdll::parse(&header);
         /*
         let test = kernel32.LoadLibraryA("aepic.dll");
         dbg!(test);
@@ -70,7 +72,7 @@ fn main() {
         dbg!(test);
         */
         let testhandle = kernel32.CreateFile(
-            "C:\\Windows\\System32\\calc.exe",
+            "C:\\Users\\Public\\Documents\\test.txt",
             catam::GENERIC_READ,
             catam::FILE_SHARE_READ,
             None,
@@ -81,7 +83,29 @@ fn main() {
         dbg!(testhandle);
         let filesize = kernel32.GetFileSize(testhandle, None);
         dbg!(filesize);
-
+        /*
+        let heaphandle = kernel32.GetProcessHeap();
+        dbg!(heaphandle);
+        //let newheaphandle = kernel32.HeapCreate(0, filesize, 0);
+        let newheaphandle = ntdll.RtlCreateHeap(catam::HEAP_GROWABLE, None, None, None, None, None);
+        dbg!(newheaphandle);
+        let pnewheaphandle: *const *const c_void = &newheaphandle;
+        dbg!(pnewheaphandle);
+        let heappointer = ntdll.RtlAllocateHeap(
+            pnewheaphandle as *const c_void,
+            catam::HEAP_ZERO_MEMORY,
+            filesize,
+        );
+        dbg!(heappointer);
+        */
+        let mut vec: Vec<u8> = vec![0; filesize as usize];
+        let mut pvec = vec.as_mut_ptr() as *mut c_void;
+        let mut numberofbytesread: u32 = 0;
+        let lpnumberofbytesread = &mut numberofbytesread as *mut u32 as *mut c_void;
+        kernel32.ReadFile(testhandle, pvec, filesize, Some(lpnumberofbytesread), None);
+        dbg!(GetLastError());
+        dbg!(numberofbytesread);
+        dbg!(vec);
         //let _ = execute_local_thread(header, buf.to_vec());
     }
 }

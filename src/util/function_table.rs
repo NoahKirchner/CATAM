@@ -1,11 +1,10 @@
 use crate::util::pe_headers::parse_headers;
 use core::ffi::{c_char, c_void};
 use std::collections::HashMap;
-use std::ffi::{CStr};
+use std::ffi::CStr;
 
 use std::slice;
 use windows::Win32::System::SystemServices::IMAGE_EXPORT_DIRECTORY;
-
 
 #[derive(Debug)]
 pub struct FunctionEntry {

@@ -71,6 +71,29 @@ pub struct Kernel32 {
                // a high order dword, not necessary
     ) -> u32,
 
+    readfile: unsafe extern "C" fn(
+        isize,       // HANDLE hFile
+        *mut c_void, // LPVOID lpBuffer [out]
+        u32,         // DWORD nNumberOfBytesToRead
+        *mut c_void, // LPDWORD lpNumberOfBytesRead [out, optional], how fucking retarded is this
+        *mut c_void, //LPOVERLAPPED lpOverLapped [in, out, optional]
+    ),
+
+    getprocessheap: unsafe extern "C" fn() -> isize, // handle
+
+    heapcreate: unsafe extern "C" fn(
+        u32, // DWORD flOptions
+        u32, // SIZE_T dwInitialSize
+        u32, // SIZE_T dwMaximumSize (set to 0 for infinite size)
+    ) -> isize, //handle
+
+    // doesnt work TODO fix or dont idc
+    heapalloc: *const unsafe extern "C" fn(
+        isize, // HANDLE hHeap
+        u32,   // DWORD dwFlags
+        u32,   // SIZE_T dwBytes (just a dword cuh)
+    ) -> *const c_void,
+
     // isize is a HANDLE, u32 is time (use the INFINITE constant)
     waitforsingleobject: unsafe extern "C" fn(isize, u32) -> (),
 
@@ -85,7 +108,7 @@ pub struct Kernel32 {
 }
 
 impl Kernel32 {
-    pub unsafe fn parse(process_header: PeHeader) -> Kernel32 {
+    pub unsafe fn parse(process_header: &PeHeader) -> Kernel32 {
         let dll = process_header
             .dll_map
             .get("kernel32.dll")
@@ -111,6 +134,15 @@ impl Kernel32 {
 
         let getfilesize = transmute(get_function_pointer(&function_table, "GetFileSize"));
 
+        let readfile = transmute(get_function_pointer(&function_table, "ReadFile"));
+
+        let getprocessheap = transmute(get_function_pointer(&function_table, "GetProcessHeap"));
+
+        let heapcreate = transmute(get_function_pointer(&function_table, "HeapCreate"));
+
+        let heapalloc = transmute(get_function_pointer(&function_table, "HeapAlloc"));
+        dbg!(heapalloc);
+
         let waitforsingleobject =
             transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
 
@@ -124,6 +156,10 @@ impl Kernel32 {
             initializeprocthreadattributelist,
             createfile,
             getfilesize,
+            readfile,
+            getprocessheap,
+            heapcreate,
+            heapalloc,
             waitforsingleobject,
             loadlibrarya,
         }
@@ -335,6 +371,49 @@ impl Kernel32 {
             Some(x) => x,
         };
         (self.getfilesize)(hFile, lpFileSizeHigh)
+    }
+
+    pub unsafe fn ReadFile(
+        &self,
+        hFile: isize,
+        lpBuffer: *mut c_void,
+        nNumberOfBytesToRead: u32,
+        bytesread: Option<*mut c_void>,
+        overlapped: Option<*mut c_void>,
+    ) {
+        let lpNumberOfBytesRead = match bytesread {
+            None => null_mut() as *mut c_void,
+            Some(x) => x,
+        };
+        let lpOverlapped = match overlapped {
+            None => null_mut() as *mut c_void,
+            Some(x) => x,
+        };
+        (self.readfile)(
+            hFile,
+            lpBuffer,
+            nNumberOfBytesToRead,
+            lpNumberOfBytesRead,
+            lpOverlapped,
+        )
+    }
+
+    pub unsafe fn GetProcessHeap(&self) -> isize {
+        (self.getprocessheap)()
+    }
+
+    pub unsafe fn HeapCreate(&self, flags: u32, startsize: u32, maxsize: u32) -> isize {
+        let flOptions = flags;
+        let dwInitialSize = startsize;
+        let dwMaximumSize = maxsize;
+        (self.heapcreate)(flOptions, dwInitialSize, dwMaximumSize)
+    }
+
+    pub unsafe fn HeapAlloc(&self, heaphandle: isize, heapflags: u32, size: u32) -> *const c_void {
+        let hHeap = heaphandle;
+        let dwFlags = heapflags;
+        let dwBytes = size;
+        (*self.heapalloc)(hHeap, dwFlags, dwBytes)
     }
 
     pub unsafe fn WaitForSingleObject(&self, hhandle: isize, dwmilliseconds: u32) -> () {

@@ -46,3 +46,10 @@ pub static FILE_FLAG_RANDOM_ACCESS: u32 = 0x10000000;
 pub static FILE_FLAG_SESSION_AWARE: u32 = 0x00800000;
 pub static FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;
 pub static FILE_FLAG_WRITE_THROUGH: u32 = 0x80000000;
+
+// Heap Flags (https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc, https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapcreate)
+pub static HEAP_GENERATE_EXCEPTIONS: u32 = 0x00000004;
+pub static HEAP_NO_SERIALIZE: u32 = 0x00000001;
+pub static HEAP_ZERO_MEMORY: u32 = 0x00000008;
+pub static HEAP_CREATE_ENABLE_EXECUTE: u32 = 0x00040000;
+pub static HEAP_GROWABLE: u32 = 2;

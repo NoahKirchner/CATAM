@@ -17,7 +17,7 @@ pub unsafe fn execute_local_thread(
 ) -> Result<isize, Box<dyn Error>> {
     let shellcode_size = shellcode.len();
 
-    let kernel32 = Kernel32::parse(pe_header);
+    let kernel32 = Kernel32::parse(&pe_header);
 
     let mem_pointer = kernel32.VirtualAlloc(
         None,
