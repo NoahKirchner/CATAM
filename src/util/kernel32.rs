@@ -1,25 +1,22 @@
 #![allow(nonstandard_style)]
 // Rust imports
 use crate::util::function_table::{export_dll, get_function_pointer};
-use crate::util::pe_headers::PeHeader;
 use crate::util::helpers::*;
+use crate::util::pe_headers::PeHeader;
 use core::ffi::c_void;
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
 use std::ptr::{null, null_mut};
 
-
 // Windows struct imports
+use windows::Win32::Foundation::GetLastError;
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 use windows::Win32::System::Kernel::CSTRING;
-use windows::Win32::System::Threading::{PROCESS_INFORMATION, STARTUPINFOEXA, LPPROC_THREAD_ATTRIBUTE_LIST};
-use windows::Win32::Foundation::GetLastError;
+use windows::Win32::System::Threading::{
+    LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION, STARTUPINFOEXA,
+};
 // Defines for process creation flags, probably move these to a
 // more abstracted file in ../execution/ or something
-pub const CREATE_NO_WINDOW: u32 = 0x08000000;
-pub const CREATE_SUSPENDED: u32 = 0x00000004;
-pub const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x00080000;
-
 // @TODO, use the windows crate's repr c structs as arguments where they are needed. Use the
 // implementation of CreateProcess below as a template
 
@@ -40,7 +37,7 @@ pub struct Kernel32 {
 
     createprocess: unsafe extern "C" fn(
         *const c_void, // LPCSTR lpApplicationName
-        *const c_void,   // LPSTR lpCommandLine [in, out]
+        *const c_void, // LPSTR lpCommandLine [in, out]
         *const c_void, // LPSECURITY_ATTRIBUTES lpProcessAttributes
         *const c_void, // LPSECURITY_ATTRIBUTES lpThreadAttributes
         bool,          // bool bInheritHandles (just google it dude), prolly set true
@@ -57,6 +54,22 @@ pub struct Kernel32 {
         u32, //This must be 0
         *mut usize,
     ) -> (),
+
+    createfile: unsafe extern "C" fn(
+        *const c_void, // LPCSTR lpFileName
+        u32,           // DWORD dwDesiredAccess
+        u32,           // DWORD dwShareMode
+        *const c_void, // LPSECURITYATTRIBUTES lpSecurityAttributes [Optional]
+        u32,           // DWORD dwCreationDisposition
+        u32,           // DWORD dwFlagsAndAttributes
+        isize,         // HANDLE hTemplateFile [Optional] (Pass zero for null)
+    ) -> isize, // HANDLE
+
+    getfilesize: unsafe extern "C" fn(
+        isize, // HANDLE hfile (Handle to file to read returned by CreateFile)
+        *const c_void, // LPDWORD lpFileSizeHigh [Out, Optional] a pointer to a return variable for
+               // a high order dword, not necessary
+    ) -> u32,
 
     // isize is a HANDLE, u32 is time (use the INFINITE constant)
     waitforsingleobject: unsafe extern "C" fn(isize, u32) -> (),
@@ -87,8 +100,16 @@ impl Kernel32 {
 
         let createprocess = transmute(get_function_pointer(&function_table, "CreateProcessA"));
 
-        let initializeprocthreadattributelist = transmute(get_function_pointer(&function_table, "InitializeProcThreadAttributeList"));
+        //TODO this doesnt work idiot
+        let initializeprocthreadattributelist = transmute(get_function_pointer(
+            &function_table,
+            "InitializeProcThreadAttributeList",
+        ));
         dbg!(initializeprocthreadattributelist);
+
+        let createfile = transmute(get_function_pointer(&function_table, "CreateFileA"));
+
+        let getfilesize = transmute(get_function_pointer(&function_table, "GetFileSize"));
 
         let waitforsingleobject =
             transmute(get_function_pointer(&function_table, "WaitForSingleObject"));
@@ -101,6 +122,8 @@ impl Kernel32 {
             createthread,
             createprocess,
             initializeprocthreadattributelist,
+            createfile,
+            getfilesize,
             waitforsingleobject,
             loadlibrarya,
         }
@@ -176,10 +199,10 @@ impl Kernel32 {
         startupinfo: STARTUPINFOEXA,
     ) -> PROCESS_INFORMATION {
         let mut processinfo = PROCESS_INFORMATION::default();
-       
-        // I know that these are terrible implementations that should be handled 
-        // with a match statement or something because they are technically optional, 
-        // but I swear to God using ANY kind of error checking here passes an invalid string 
+
+        // I know that these are terrible implementations that should be handled
+        // with a match statement or something because they are technically optional,
+        // but I swear to God using ANY kind of error checking here passes an invalid string
         // somehow @TODO figure out what the fuck happenin. I think it's a Windows API issue.
         let cstringpath = convert_to_cstring(exepath);
         let path = convert_to_cstr(&cstringpath);
@@ -237,15 +260,21 @@ impl Kernel32 {
         );
         processinfo
     }
-
-    pub unsafe fn InitializeProcThreadAttributeList(&self, 
-        attributecount:u32,
-        )->LPPROC_THREAD_ATTRIBUTE_LIST {
+    //@TODO this doesn't work sorry
+    pub unsafe fn InitializeProcThreadAttributeList(
+        &self,
+        attributecount: u32,
+    ) -> LPPROC_THREAD_ATTRIBUTE_LIST {
         let mut size: usize = 0;
         dbg!(size);
         let mut lpsize = &mut size as *mut usize;
         dbg!(lpsize);
-        dbg!((self.initializeprocthreadattributelist)(core::ptr::null_mut(), attributecount.clone(), 0, lpsize));
+        dbg!((self.initializeprocthreadattributelist)(
+            core::ptr::null_mut(),
+            attributecount.clone(),
+            0,
+            lpsize
+        ));
         dbg!(GetLastError());
         dbg!(size);
         let mut lpattributelist = LPPROC_THREAD_ATTRIBUTE_LIST::default();
@@ -253,6 +282,59 @@ impl Kernel32 {
         (self.initializeprocthreadattributelist)(lpattributelist.0, attributecount, 0, lpsize);
         dbg!(lpattributelist);
         lpattributelist
+    }
+
+    pub unsafe fn CreateFile(
+        &self,
+        filename: &str,
+        access: u32,
+        sharemode: u32,
+        securityattributes: Option<SECURITY_ATTRIBUTES>,
+        creationdisposition: u32,
+        flags: u32,
+        templatefile: Option<isize>,
+    ) -> isize {
+        let cstringfilename = convert_to_cstring(filename);
+        let filename = convert_to_cstr(&cstringfilename);
+        let lpFileName = filename.as_ptr() as *const c_void;
+        let dwDesiredAccess = access;
+        let dwShareMode = sharemode;
+
+        let lpSecurityAttributes = match securityattributes {
+            None => null() as *const c_void,
+            Some(x) => &x as *const _ as *const c_void,
+        };
+
+        let dwCreationDisposition = creationdisposition;
+        let dwFlagsAndAttributes = flags;
+
+        let hTemplateFile = match templatefile {
+            None => 0 as isize,
+            Some(x) => x,
+        };
+
+        (self.createfile)(
+            lpFileName,
+            dwDesiredAccess,
+            dwShareMode,
+            lpSecurityAttributes,
+            dwCreationDisposition,
+            dwFlagsAndAttributes,
+            hTemplateFile,
+        )
+    }
+
+    pub unsafe fn GetFileSize(
+        &self,
+        filehandle: isize,
+        filesizehigh: Option<*const c_void>,
+    ) -> u32 {
+        let hFile = filehandle;
+        let lpFileSizeHigh = match filesizehigh {
+            None => null() as *const c_void,
+            Some(x) => x,
+        };
+        (self.getfilesize)(hFile, lpFileSizeHigh)
     }
 
     pub unsafe fn WaitForSingleObject(&self, hhandle: isize, dwmilliseconds: u32) -> () {

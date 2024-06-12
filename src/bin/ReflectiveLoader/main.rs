@@ -48,6 +48,7 @@ fn main() {
         dbg!("process start");
         let header = PeHeader::parse();
         let kernel32 = Kernel32::parse(header);
+        /*
         let test = kernel32.LoadLibraryA("aepic.dll");
         dbg!(test);
 
@@ -55,11 +56,11 @@ fn main() {
         dbg!(startupinfo);
         let test = kernel32.CreateProcess(
             "C:\\Windows\\System32\\calc.exe",
-            "",//("C:\\Windows\\System32\\cmd.exe /c whoami"),
+            "", //("C:\\Windows\\System32\\cmd.exe /c whoami"),
             None,
             None,
             false,
-            EXTENDED_STARTUPINFO_PRESENT,
+            catam::EXTENDED_STARTUPINFO_PRESENT,
             None,
             None,
             startupinfo,
@@ -67,11 +68,19 @@ fn main() {
         let wtf = GetLastError();
         dbg!(wtf);
         dbg!(test);
-        dbg!("next thing lol");
-        let anothertest = kernel32.InitializeProcThreadAttributeList(1);
-        GetLastError();
-        dbg!(anothertest);
-
+        */
+        let testhandle = kernel32.CreateFile(
+            "C:\\Windows\\System32\\calc.exe",
+            catam::GENERIC_READ,
+            catam::FILE_SHARE_READ,
+            None,
+            catam::OPEN_EXISTING,
+            catam::FILE_ATTRIBUTE_NORMAL | catam::FILE_FLAG_OVERLAPPED,
+            None,
+        );
+        dbg!(testhandle);
+        let filesize = kernel32.GetFileSize(testhandle, None);
+        dbg!(filesize);
 
         //let _ = execute_local_thread(header, buf.to_vec());
     }
