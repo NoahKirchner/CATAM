@@ -101,10 +101,21 @@ pub struct Kernel32 {
     // be a pointer to a null terminated C String and this is what the
     // legitimate windows crate does.
     loadlibrarya: unsafe extern "C" fn(*const c_void) -> isize,
+
     // GetModuleHandle
     // GetProcAddress
+
     // ReadProcessMemory
+
     // WriteProcessMemory
+    writeprocessmemory: unsafe extern "C" fn(
+        isize,         // HANDLE hProcess
+        *mut c_void,   // LPVOID lpBaseAddress
+        *const c_void, // LPCVOID lpBuffer
+        u32,           // SIZE_T nSize
+        &mut u32,      // SIZE_T *lpNumberOfBytesWritten
+    ),
+    // VirtualAllocEx
 }
 
 impl Kernel32 {
@@ -373,6 +384,7 @@ impl Kernel32 {
         (self.getfilesize)(hFile, lpFileSizeHigh)
     }
 
+    // Doesn't work lol!
     pub unsafe fn ReadFile(
         &self,
         hFile: isize,
@@ -398,6 +410,7 @@ impl Kernel32 {
         )
     }
 
+    // None of the heap stuff works
     pub unsafe fn GetProcessHeap(&self) -> isize {
         (self.getprocessheap)()
     }

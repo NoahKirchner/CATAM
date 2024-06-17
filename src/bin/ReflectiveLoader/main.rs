@@ -2,6 +2,7 @@ use catam::execution::thread::execute_local_thread;
 use catam::util::function_table::export_dll;
 use catam::util::kernel32::*;
 use catam::util::ntdll::*;
+use catam::util::pe_headers::parse_headers;
 use catam::util::pe_headers::PeHeader;
 use std::f32::INFINITY;
 use std::ffi::{c_void, CString};
@@ -10,6 +11,10 @@ use std::thread::sleep;
 use std::time::Duration;
 use windows::Win32::Foundation::GetLastError;
 use windows::Win32::System::Threading::STARTUPINFOEXA;
+
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
 
 fn main() {
     let buf: [u8; 460] = [
@@ -53,26 +58,9 @@ fn main() {
         /*
         let test = kernel32.LoadLibraryA("aepic.dll");
         dbg!(test);
-
-        let startupinfo = STARTUPINFOEXA::default();
-        dbg!(startupinfo);
-        let test = kernel32.CreateProcess(
-            "C:\\Windows\\System32\\calc.exe",
-            "", //("C:\\Windows\\System32\\cmd.exe /c whoami"),
-            None,
-            None,
-            false,
-            catam::EXTENDED_STARTUPINFO_PRESENT,
-            None,
-            None,
-            startupinfo,
-        );
-        let wtf = GetLastError();
-        dbg!(wtf);
-        dbg!(test);
         */
         let testhandle = kernel32.CreateFile(
-            "C:\\Users\\Public\\Documents\\test.txt",
+            "C:\\Windows\\System32\\notepad.exe",
             catam::GENERIC_READ,
             catam::FILE_SHARE_READ,
             None,
@@ -98,6 +86,9 @@ fn main() {
         );
         dbg!(heappointer);
         */
+
+        // This doesn't work and I don't know why
+        /*
         let mut vec: Vec<u8> = vec![0; filesize as usize];
         let mut pvec = vec.as_mut_ptr() as *mut c_void;
         let mut numberofbytesread: u32 = 0;
@@ -106,6 +97,37 @@ fn main() {
         dbg!(GetLastError());
         dbg!(numberofbytesread);
         dbg!(vec);
+        */
+        // somehow this works to parse out the headers from the file we just read. swag.
+        let mut f = File::open("C:\\Windows\\System32\\notepad.exe").unwrap();
+        let mut vec = vec![0; filesize as usize];
+        f.read(&mut vec).unwrap();
+        dbg!(filesize);
+        dbg!(vec.len());
+        let pebuffer = vec.as_slice();
+        let ppebuffer = pebuffer as *const _ as *const c_void;
+        let payloadheaders = parse_headers(ppebuffer);
+        dbg!(payloadheaders.1.OptionalHeader.SizeOfHeaders);
+        dbg!(payloadheaders.1.FileHeader.NumberOfSections);
+        dbg!(payloadheaders.1.OptionalHeader.ImageBase);
+        dbg!(payloadheaders.1.OptionalHeader.AddressOfEntryPoint);
+
+        /*
+        let startupinfo = STARTUPINFOEXA::default();
+        dbg!(startupinfo);
+        let process = kernel32.CreateProcess(
+            "C:\\Windows\\System32\\calc.exe",
+            "",
+            None,
+            None,
+            false,
+            catam::EXTENDED_STARTUPINFO_PRESENT,
+            None,
+            None,
+            startupinfo,
+        );
+        */
+
         //let _ = execute_local_thread(header, buf.to_vec());
     }
 }
